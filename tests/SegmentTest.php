@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Aranyasen\HL7\Tests;
 
 use Aranyasen\HL7\EscapeSequenceHandler;
+use Aranyasen\HL7\Message;
 use Aranyasen\HL7\Segment;
 
 class SegmentTest extends TestCase
@@ -115,8 +116,12 @@ class SegmentTest extends TestCase
     {
         $segment = new Segment('XXX');
         $segment->setField(1, 'a\F\b');
+        $segment->setField(2, [ 'c\F\d' ]);
+        $segment->setField(3, [ [ 'e\F\f' ] ]);
 
         self::assertSame('a|b', $segment->getField(1, true));
+        self::assertSame([ 'c|d' ], $segment->getField(2, true));
+        self::assertSame([ [ 'e|f' ] ], $segment->getField(3, true));
     }
 
     /** @test */
@@ -124,9 +129,13 @@ class SegmentTest extends TestCase
     {
         $segment = new Segment('XXX');
         $segment->setField(1, 'a\F\b');
+        $segment->setField(2, [ 'c\F\d' ]);
+        $segment->setField(3, [ [ 'e\F\f' ] ]);
         $segment->setEscapeSequenceHandler(new EscapeSequenceHandler('\\'));
 
         self::assertSame('a|b', $segment->getField(1));
+        self::assertSame([ 'c|d' ], $segment->getField(2));
+        self::assertSame([ [ 'e|f' ] ], $segment->getField(3));
     }
 
     /** @test */
@@ -135,7 +144,11 @@ class SegmentTest extends TestCase
         $segment = new Segment('XXX');
         $segment->setEscapeSequenceHandler(new EscapeSequenceHandler('\\'));
         $segment->setField(1, 'a|b');
+        $segment->setField(2, [ 'c|d' ]);
+        $segment->setField(3, [ [ 'e|f' ] ]);
 
         self::assertSame('a|b', $segment->getField(1));
+        self::assertSame([ 'c|d' ], $segment->getField(2));
+        self::assertSame([ [ 'e|f' ] ], $segment->getField(3));
     }
 }
