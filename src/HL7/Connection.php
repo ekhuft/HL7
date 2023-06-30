@@ -6,6 +6,7 @@ namespace Aranyasen\HL7;
 
 use Aranyasen\Exceptions\HL7ConnectionException;
 use Aranyasen\Exceptions\HL7Exception;
+use Aranyasen\HL7\Segments\MSH;
 use Exception;
 use Socket;
 
@@ -124,9 +125,16 @@ class Connection
      * @throws HL7ConnectionException
      * @throws HL7Exception
      */
-    public function send(Message $msg, string $responseCharEncoding = 'UTF-8', bool $noWait = false): ?Message
+    public function send(Message $msg, string $responseCharEncoding = 'UTF-8', bool $noWait = false, bool $verifyControlId = true): ?Message
     {
+        $requestHeader = $msg->getFirstSegmentInstance('MSH');
+
+        assert($requestHeader instanceof MSH);
+
+        $requestControlId = $requestHeader->getMessageControlId();
+
         $message = $this->MESSAGE_PREFIX . $msg->toString(true) . $this->MESSAGE_SUFFIX; // As per MLLP protocol
+
         if (!socket_write($this->socket, $message, strlen($message))) {
             throw new HL7Exception("Could not send data to server: " . socket_strerror(socket_last_error()));
         }
@@ -135,33 +143,54 @@ class Connection
             return null;
         }
 
-        $data = null;
+        $responses = [];
+
+        $incomingResponse = null;
 
         $startTime = time();
         while (($buf = socket_read($this->socket, 1024)) !== false) { // Read ACK / NACK from server
-            $data .= $buf;
-            if (preg_match('/' . $this->MESSAGE_SUFFIX . '$/', $data)) {
-                break;
+            $incomingResponse .= $buf;
+            if (preg_match('/' . $this->MESSAGE_SUFFIX . '$/', $incomingResponse)) {
+                $responses[] = $incomingResponse;
+                $incomingResponse = null;
             }
-            if ((time() - $startTime) > $this->timeout) {
+            if (empty($responses) && (time() - $startTime) > $this->timeout) {
                 throw new HL7ConnectionException(
                     "Response partially received. Timed out listening for end-of-message from server"
                 );
             }
         }
 
-        if (empty($data)) {
+        if (empty($responses)) {
             throw new HL7ConnectionException("No response received within {$this->timeout} seconds");
         }
 
-        // Remove message prefix and suffix added by the MLLP server
-        $data = preg_replace('/^' . $this->MESSAGE_PREFIX . '/', '', $data);
-        $data = preg_replace('/' . $this->MESSAGE_SUFFIX . '$/', '', $data);
+        foreach ($responses as $raw) {
+            // Remove message prefix and suffix added by the MLLP server
+            $raw = preg_replace('/^' . $this->MESSAGE_PREFIX . '/', '', $raw);
+            $raw = preg_replace('/' . $this->MESSAGE_SUFFIX . '$/', '', $raw);
 
-        // set character encoding
-        $data = mb_convert_encoding($data, $responseCharEncoding);
+            // Set character encoding
+            $raw = mb_convert_encoding($raw, $responseCharEncoding);
 
-        return new Message($data, $this->hl7Globals, true, true);
+            // Construct our response
+            $response = new Message($raw, $this->hl7Globals, true, true);
+
+            // Verify the Message Control ID and/or return
+            if (!$verifyControlId) {
+                return $response;
+            }
+
+            $responseHeader = $response->getFirstSegmentInstance('MSH');
+
+            assert($responseHeader instanceof MSH);
+
+            if ($requestControlId == $responseHeader->getMessageControlId()) {
+                return $response;
+            }
+        }
+
+        throw new HL7ConnectionException("No response received within {$this->timeout} seconds");
     }
 
     /*
