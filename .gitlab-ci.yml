@@ -1,0 +1,42 @@
+image: php:8.2
+
+stages:
+  - build
+  - qa
+  - publish
+
+before_script:
+  - 'cp -R /ekhuft/certs/* /usr/local/share/ca-certificates/'
+  - 'update-ca-certificates'
+
+composer:
+  stage: build
+  script:
+    - 'apk add composer'
+    - 'composer config gitlab-token.gitlab.ekhuft.nhs.uk $COMPOSER_ACCESS_TOKEN'
+    - 'composer install'
+    - 'rm auth.json'
+  artifacts:
+    paths:
+      - vendor
+    expire_in: 1 hour
+  only:
+    - merge_requests
+    - tags
+
+phpunit:
+  stage: qa
+  dependencies:
+    - composer
+  script:
+    - 'vendor/bin/phpunit'
+  only:
+    - merge_requests
+    - tags
+
+push package:
+  stage: publish
+  script:
+    - 'curl --header "Job-Token: $CI_JOB_TOKEN" --data tag=$CI_COMMIT_TAG "https://gitlab.ekhuft.nhs.uk/api/v4/projects/$CI_PROJECT_ID/packages/composer"'
+  only:
+    - tags
