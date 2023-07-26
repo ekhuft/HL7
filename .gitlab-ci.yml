@@ -8,13 +8,14 @@ stages:
 before_script:
   - 'cp -R /ekhuft/certs/* /usr/local/share/ca-certificates/'
   - 'update-ca-certificates'
+  - 'apk add composer'
 
 composer:
   stage: build
   script:
     - 'apk add composer'
     - 'composer config gitlab-token.gitlab.ekhuft.nhs.uk $COMPOSER_ACCESS_TOKEN'
-    - 'composer install'
+    - 'composer install --ignore-platform-reqs'
     - 'rm auth.json'
   artifacts:
     paths:
