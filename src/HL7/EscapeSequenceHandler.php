@@ -81,28 +81,32 @@ class EscapeSequenceHandler
     /**
      * Convert separator characters in a string into their escaped meanings.
      *
-     * @param string $value
+     * @param string|array $value
      */
-    public function escape(string $value): string
+    public function escape(string|array $value): string|array
     {
-        return str_replace(
-            array_reverse($this->getMeanings()),
-            array_reverse($this->getSequences()),
-            $value
-        );
+        return is_array($value)
+            ? array_map([ $this, __FUNCTION__ ], $value)
+            : str_replace(
+                array_reverse($this->getMeanings()),
+                array_reverse($this->getSequences()),
+                $value
+            );
     }
 
     /**
      * Convert escaped separator characters into their regular form.
      *
-     * @param string $value
+     * @param string|array $value
      */
-    public function unescape(string $value): string
+    public function unescape(string|array $value): string|array
     {
-        return str_replace(
-            $this->getSequences(),
-            $this->getMeanings(),
-            $value
-        );
+        return is_array($value)
+            ? array_map([ $this, __FUNCTION__ ], $value)
+            : str_replace(
+                $this->getSequences(),
+                $this->getMeanings(),
+                $value
+            );
     }
 }

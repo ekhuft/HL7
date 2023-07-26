@@ -39,6 +39,7 @@ class Connection
 {
     protected Socket $socket;
     protected int $timeout;
+    protected array $hl7Globals;
 
     /** # Octal 13 (Hex: 0B): Vertical Tab */
     protected string $MESSAGE_PREFIX = "\013";
@@ -54,13 +55,14 @@ class Connection
      * @param int $timeout Connection timeout
      * @throws HL7ConnectionException
      */
-    public function __construct(string $host, int $port, int $timeout = 10)
+    public function __construct(string $host, int $port, int $timeout = 10, array $hl7Globals = [])
     {
         if (!extension_loaded('sockets')) {
             throw new HL7ConnectionException('Please install ext-sockets to run Connection');
         }
         $this->setSocket($host, $port, $timeout);
         $this->timeout = $timeout;
+        $this->hl7Globals = $hl7Globals;
     }
 
     /**
@@ -159,7 +161,7 @@ class Connection
         // set character encoding
         $data = mb_convert_encoding($data, $responseCharEncoding);
 
-        return new Message($data, null, true, true);
+        return new Message($data, $this->hl7Globals, true, true);
     }
 
     /*

@@ -81,10 +81,16 @@ class Segment
         if ($this->isValueEmpty($value)) {
             return false;
         }
-
+        
         // Fill in the blanks...
         for ($i = count($this->fields); $i < $index; $i++) {
             $this->fields[$i] = '';
+        }
+
+        if (is_int($value)) {
+            $this->fields[$index] = $value;
+
+            return true;
         }
 
         $this->fields[$index] = ($this->hasEscapeSequenceHandler() || $escape === true)
