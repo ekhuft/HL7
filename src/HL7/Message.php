@@ -337,10 +337,24 @@ class Message
 
         foreach ($fields as $field) {
             if (is_array($field)) {
+                $subComponentArrays = array_filter($field, fn ($subComponent) => is_array($subComponent));
+
                 foreach ($field as $index => $value) {
-                    is_array($value)
-                        ? ($segmentString .= implode($this->subcomponentSeparator, $value))
-                        : ($segmentString .= $value);
+                    if (is_array($value)) {
+                        // If the value is an array-of-arrays encode as a list
+                        if (count($subComponentArrays) > 1 && (count($field) === count($subComponentArrays))) {
+                            $segmentString .= implode(
+                                $this->repetitionSeparator,
+                                array_map(fn ($subComponent) => implode($this->subcomponentSeparator, $subComponent), $field)
+                            );
+
+                        // If the value is a single array, encode as subcomponents
+                        } else {
+                            $segmentString .= implode($this->subcomponentSeparator, $value);
+                        }
+                    } else {
+                        $segmentString .= $value;
+                    }
 
                     if ($index < (count($field) - 1)) {
                         $segmentString .= $this->componentSeparator;
