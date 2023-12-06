@@ -337,6 +337,17 @@ class Message
 
         foreach ($fields as $field) {
             if (is_array($field)) {
+                $componentArrays = array_filter($field, fn ($component) => is_array($component));
+
+                if (count($componentArrays) > 1 && (count($field) === count($componentArrays))) {
+                    $segmentString .= implode(
+                        $this->repetitionSeparator,
+                        array_map(fn ($component) => implode($this->componentSeparator, $component), $field)
+                    ) . $this->fieldSeparator;
+
+                    continue;
+                }
+
                 foreach ($field as $index => $value) {
                     is_array($value)
                         ? ($segmentString .= implode($this->subcomponentSeparator, $value))

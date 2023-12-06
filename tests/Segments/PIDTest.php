@@ -6,6 +6,7 @@ namespace Aranyasen\HL7\Tests\Segments;
 
 use Aranyasen\Exceptions\HL7Exception;
 use Aranyasen\HL7\Message;
+use Aranyasen\HL7\Segments\MSH;
 use Aranyasen\HL7\Segments\PID;
 use Aranyasen\HL7\Tests\TestCase;
 use InvalidArgumentException;
@@ -55,6 +56,55 @@ class PIDTest extends TestCase
             'Lastname^N|\n',
             $msg->toString()
         );
+    }
+
+    /**
+     * @test
+     */
+    public function PID_3_should_accept_array_of_arrays(): void
+    {
+        $opts = [
+            'SEGMENT_SEPARATOR' => "\n",
+            'SEGMENT_ENDING_BAR' => true,
+            'FIELD_SEPARATOR' => '|',
+            'COMPONENT_SEPARATOR' => '^',
+            'SUBCOMPONENT_SEPARATOR' => '^',
+            'REPETITION_SEPARATOR' => '~',
+            'ESCAPE_CHARACTER' => '\\',
+            'HL7_VERSION' => '2.3',
+        ];
+
+        // Create a Message with MSH
+        $msg = new Message(null, $opts);
+
+        $msh = new MSH(null, $opts);
+        $msg->addSegment($msh);
+
+        // Create a PID with multiple identifiers
+        $pid = new PID;
+
+        $pid->setPatientID('12345');
+
+        $pid->setPatientIdentifierList([
+            [ '12345', '', '', '', 'AB' ],
+            [ '56789', '', '', '', 'CD' ],
+        ]);
+
+        $msg->addSegment($pid);
+
+        $this->assertStringContainsString('PID|1|12345|12345^^^^AB~56789^^^^CD|', $msg->toString());
+
+        // Assert that we can accurately decode, too...
+        $parsed = new Message($msg->toString(), $opts);
+
+        $parsedPID = $parsed->getFirstSegmentInstance('PID');
+
+        $identifiers = $parsedPID->getPatientIdentifierList();
+
+        $this->assertCount(2, $identifiers);
+
+        $this->assertEquals('12345', $identifiers[0][0]);
+        $this->assertEquals('56789', $identifiers[1][0]);
     }
 
     public function validSexValues(): array
