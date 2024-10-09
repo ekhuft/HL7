@@ -131,8 +131,6 @@ class Connection
 
         assert($requestHeader instanceof MSH);
 
-        $requestControlId = $requestHeader->getMessageControlId();
-
         $message = $this->MESSAGE_PREFIX . $msg->toString(true) . $this->MESSAGE_SUFFIX; // As per MLLP protocol
 
         if (!socket_write($this->socket, $message, strlen($message))) {
@@ -148,12 +146,27 @@ class Connection
         $incomingResponse = null;
 
         $startTime = time();
-        while (($buf = socket_read($this->socket, 1024)) !== false) { // Read ACK / NACK from server
+
+        // Start buffering responses sent to the socket
+        while (($buf = socket_read($this->socket, 1024)) !== false) {
             $incomingResponse .= $buf;
+
+            // If we've received a complete message, parse it 
             if (preg_match('/' . $this->MESSAGE_SUFFIX . '$/', $incomingResponse)) {
-                $responses[] = $incomingResponse;
-                $incomingResponse = null;
+                $message = $this->handleResponse($incomingResponse, $responseCharEncoding);
+
+                // If set to verify the Message Control ID, but the ID does not match, store the complete response
+                if ($verifyControlId && !$this->verifyMessageControlID($requestHeader->getMessageControlId(), $message)) {
+                    $responses[] = $incomingResponse;
+                    $incomingResponse = null;
+                    continue;
+                }
+
+                // If verified (or not verifying) return the response
+                return $message;
             }
+
+            // If no complete responses are received before the timeout, time-out with partial response
             if (empty($responses) && (time() - $startTime) > $this->timeout) {
                 throw new HL7ConnectionException(
                     "Response partially received. Timed out listening for end-of-message from server"
@@ -161,36 +174,30 @@ class Connection
             }
         }
 
-        if (empty($responses)) {
-            throw new HL7ConnectionException("No response received within {$this->timeout} seconds");
-        }
-
-        foreach ($responses as $raw) {
-            // Remove message prefix and suffix added by the MLLP server
-            $raw = preg_replace('/^' . $this->MESSAGE_PREFIX . '/', '', $raw);
-            $raw = preg_replace('/' . $this->MESSAGE_SUFFIX . '$/', '', $raw);
-
-            // Set character encoding
-            $raw = mb_convert_encoding($raw, $responseCharEncoding);
-
-            // Construct our response
-            $response = new Message($raw, $this->hl7Globals, true, true);
-
-            // Verify the Message Control ID and/or return
-            if (!$verifyControlId) {
-                return $response;
-            }
-
-            $responseHeader = $response->getFirstSegmentInstance('MSH');
-
-            assert($responseHeader instanceof MSH);
-
-            if ($requestControlId == $responseHeader->getMessageControlId()) {
-                return $response;
-            }
-        }
-
+        // If no responses have been received, timeout
         throw new HL7ConnectionException("No response received within {$this->timeout} seconds");
+    }
+
+    protected function handleResponse(string $raw, string $charEncoding): Message
+    {
+        // Remove message prefix and suffix added by the MLLP server
+        $raw = preg_replace('/^' . $this->MESSAGE_PREFIX . '/', '', $raw);
+        $raw = preg_replace('/' . $this->MESSAGE_SUFFIX . '$/', '', $raw);
+
+        // Set character encoding
+        $raw = mb_convert_encoding($raw, $charEncoding);
+
+        // Construct our response
+        return new Message($raw, $this->hl7Globals, true, true);
+    }
+
+    protected function verifyMessageControlID(string $expectedMessageControlID, Message $response): bool
+    {
+        $responseHeader = $response->getFirstSegmentInstance('MSH');
+
+        assert($responseHeader instanceof MSH);
+
+        return $expectedMessageControlID == $responseHeader->getMessageControlId();
     }
 
     /*

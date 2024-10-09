@@ -49,7 +49,7 @@ trait Hl7ListenerTrait
      * @param int $totalClientsToConnect How many clients are expected to connect to this server, once it's up
      * @throws HL7Exception
      */
-    public function createTcpServer(int $port, int $totalClientsToConnect): void
+    public function createTcpServer(int $port, int $totalClientsToConnect, array $cannedResponses = []): void
     {
         if (!extension_loaded('sockets')) {
             throw new RuntimeException("need ext-sockets to run this");
@@ -99,12 +99,16 @@ trait Hl7ListenerTrait
                     break;
                 }
 
-                $ackString = $this->getAckString($buffer);
-                $message = $this->MESSAGE_PREFIX . $ackString . $this->MESSAGE_SUFFIX;
-                socket_write($clientSocket, $message, strlen($message));
+                $cannedResponses = empty($cannedResponses) ?
+                    [ $this->MESSAGE_PREFIX . $this->getAckString($buffer) . $this->MESSAGE_SUFFIX ] :
+                    $cannedResponses;
 
-                // Also write to a pipe/msg queue for client to get the actual message
-                $this->writeToPipe($buffer);
+                foreach ($cannedResponses as $message) {
+                    socket_write($clientSocket, $message, strlen($message));
+
+                    // Also write to a pipe/msg queue for client to get the actual message
+                    $this->writeToPipe($buffer);
+                }
             }
 
             socket_shutdown($clientSocket);
