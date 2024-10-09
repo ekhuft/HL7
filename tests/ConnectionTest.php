@@ -10,6 +10,9 @@ use Aranyasen\HL7\Message;
 use Aranyasen\HL7\Connection;
 use RuntimeException;
 
+/**
+ * @group focus
+ */
 class ConnectionTest extends TestCase
 {
     use Hl7ListenerTrait;
@@ -78,6 +81,79 @@ class ConnectionTest extends TestCase
             $connection = new Connection('localhost', $this->port);
             $msg = new Message("MSH|^~\\&|1|\rPV1|1|O|^AAAA1^^^BB|", null, true, true);
             self::assertNull($connection->send($msg, ' UTF-8', true, false));
+
+            $this->closeTcpSocket($connection->getSocket()); // Clean up listener
+            pcntl_wait($status); // Wait till child is closed
+        }
+    }
+
+    /**
+     * @test
+     * @throws HL7ConnectionException
+     * @throws HL7Exception
+     */
+    public function return_only_message_matching_message_control_id_if_corresponding_parameter_is_set(): void
+    {
+        if (!extension_loaded('pcntl')) {
+            self::markTestSkipped("Extension pcntl_fork is not loaded");
+        }
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            throw new RuntimeException('Could not fork');
+        }
+        if (!$pid) { // In child process
+            $this->createTcpServer($this->port, 1, [
+                $this->MESSAGE_PREFIX . 'MSH|^~\\&|1|||||||MCID1' . $this->MESSAGE_SUFFIX,
+                $this->MESSAGE_PREFIX . 'MSH|^~\\&|1|||||||MCID2' . $this->MESSAGE_SUFFIX,
+                $this->MESSAGE_PREFIX . 'MSH|^~\\&|1|||||||MCID3' . $this->MESSAGE_SUFFIX,
+            ]);
+        }
+        if ($pid) { // in Parent process...
+            sleep(2); // Give a second to server (child) to start up
+
+            $connection = new Connection('localhost', $this->port);
+            $msg = new Message("MSH|^~\\&|1|||||||MCID2\rPV1|1|O|^AAAA1^^^BB|", null, true, true);
+
+            $response = $connection->send($msg, 'UTF-8', false, true);
+
+            static::assertEquals('MCID2', $response->getFirstSegmentInstance('MSH')->getMessageControlId());
+
+            $this->closeTcpSocket($connection->getSocket()); // Clean up listener
+            pcntl_wait($status); // Wait till child is closed
+        }
+    }
+
+    /**
+     * @test
+     * @throws HL7ConnectionException
+     * @throws HL7Exception
+     */
+    public function buffers_split_messages(): void
+    {
+        if (!extension_loaded('pcntl')) {
+            self::markTestSkipped("Extension pcntl_fork is not loaded");
+        }
+        $pid = pcntl_fork();
+        if ($pid === -1) {
+            throw new RuntimeException('Could not fork');
+        }
+        if (!$pid) { // In child process
+            $this->createTcpServer($this->port, 1, [
+                $this->MESSAGE_PREFIX,
+                'MSH|^~\\&|1',
+                '|||||||MCID2',
+                $this->MESSAGE_SUFFIX,
+            ]);
+        }
+        if ($pid) { // in Parent process...
+            sleep(2); // Give a second to server (child) to start up
+
+            $connection = new Connection('localhost', $this->port);
+            $msg = new Message("MSH|^~\\&|1|||||||MCID2\rPV1|1|O|^AAAA1^^^BB|", null, true, true);
+
+            $response = $connection->send($msg, 'UTF-8', false, true);
+
+            static::assertEquals('MCID2', $response->getFirstSegmentInstance('MSH')->getMessageControlId());
 
             $this->closeTcpSocket($connection->getSocket()); // Clean up listener
             pcntl_wait($status); // Wait till child is closed
