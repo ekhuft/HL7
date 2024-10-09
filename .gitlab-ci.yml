@@ -30,8 +30,9 @@ phpunit:
   dependencies:
     - composer
   script:
+    - apk add --no-cache linux-headers
     - docker-php-ext-configure pcntl --enable-pcntl 
-    - docker-php-ext-install pcntl
+    - docker-php-ext-install pcntl sockets
     - vendor/bin/phpunit
   only:
     - merge_requests
