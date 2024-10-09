@@ -131,8 +131,6 @@ class Connection
 
         assert($requestHeader instanceof MSH);
 
-        $requestControlId = $requestHeader->getMessageControlId();
-
         $message = $this->MESSAGE_PREFIX . $msg->toString(true) . $this->MESSAGE_SUFFIX; // As per MLLP protocol
 
         if (!socket_write($this->socket, $message, strlen($message))) {
@@ -158,7 +156,7 @@ class Connection
                 $message = $this->handleResponse($incomingResponse, $responseCharEncoding);
 
                 // If set to verify the Message Control ID, but the ID does not match, store the complete response
-                if ($verifyControlId && !$this->verifyMessageControlID($requestControlId, $message)) {
+                if ($verifyControlId && !$this->verifyMessageControlID($requestHeader->getMessageControlId(), $message)) {
                     $responses[] = $incomingResponse;
                     $incomingResponse = null;
                     continue;
