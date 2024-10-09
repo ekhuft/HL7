@@ -30,7 +30,9 @@ phpunit:
   dependencies:
     - composer
   script:
-    - 'vendor/bin/phpunit'
+    - docker-php-ext-configure pcntl --enable-pcntl 
+    - docker-php-ext-install pcntl
+    - vendor/bin/phpunit
   only:
     - merge_requests
     - tags
