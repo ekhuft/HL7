@@ -148,7 +148,11 @@ class Connection
         $startTime = time();
 
         // Start buffering responses sent to the socket
-        while (($buf = socket_read($this->socket, 1024)) !== false) {
+        while ($buf = socket_read($this->socket, 1024)) {
+            if ($buf === false || strlen($buf) === 0) {
+                break;
+            }
+
             $incomingResponse .= $buf;
 
             // If we've received a complete message, parse it 
